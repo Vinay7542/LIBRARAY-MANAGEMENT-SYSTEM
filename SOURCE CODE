@@ -1,0 +1,257 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+
+#define MAX_BOOKS 100
+#define MAX_NAME 50
+#define MAX_USERNAME 20
+#define MAX_PASSWORD 20
+#define ISSUE_PERIOD 15
+#define FINE_PER_DAY 5
+
+// Book structure
+typedef struct {
+    int id;
+    char title[MAX_NAME];
+    char author[MAX_NAME];
+    int isIssued;            // 0 if available, 1 if issued
+    char issuedTo[MAX_NAME];
+    time_t issuedDate;
+} Book;
+
+// Global variables
+Book library[MAX_BOOKS];
+int bookCount = 0;
+
+// Function declarations
+int login();
+void addBook();
+void removeBook();
+void issueBook();
+void returnBook();
+void listBooks();
+void calculateFine(time_t issuedDate);
+int findBookById(int id);
+void searchBook();
+void availableBooksCount();
+
+// Constants for user login
+const char FIXED_USERNAME[MAX_USERNAME] = "admin";
+const char FIXED_PASSWORD[MAX_PASSWORD] = "password";
+
+int main() {
+    int choice;
+
+    // User authentication
+    if (!login()) {
+        printf("Invalid login. Exiting...\n");
+        return 0;
+    }
+
+    // Menu system
+    do {
+        printf("\nLibrary Management System\n");
+        printf("1. Add Book\n");
+        printf("2. Remove Book\n");
+        printf("3. Issue Book\n");
+        printf("4. Return Book\n");
+        printf("5. List All Books\n");
+        printf("6. Search Book\n");
+        printf("7. Check Available Books Count\n");
+        printf("0. Exit\n");
+        printf("Enter your choice: ");
+        scanf("%d", &choice);
+
+        switch (choice) {
+            case 1: addBook(); break;
+            case 2: removeBook(); break;
+            case 3: issueBook(); break;
+            case 4: returnBook(); break;
+            case 5: listBooks(); break;
+            case 6: searchBook(); break;
+            case 7: availableBooksCount(); break;
+            case 0: printf("Exiting...\n"); break;
+            default: printf("Invalid choice! Please try again.\n");
+        }
+    } while (choice != 0);
+
+    return 0;
+}
+
+// User login function
+int login() {
+    char username[MAX_USERNAME], password[MAX_PASSWORD];
+
+    printf("Enter username: ");
+    scanf("%s", username);
+    printf("Enter password: ");
+    scanf("%s", password);
+
+    if (strcmp(username, FIXED_USERNAME) == 0 && strcmp(password, FIXED_PASSWORD) == 0) {
+        printf("Login successful!\n");
+        return 1;
+    } else {
+        return 0;
+    }
+}
+
+// Function to add a new book
+void addBook() {
+    if (bookCount >= MAX_BOOKS) {
+        printf("Library is full. Cannot add more books.\n");
+        return;
+    }
+
+    printf("Enter Book ID: ");
+    scanf("%d", &library[bookCount].id);
+    printf("Enter Book Title: ");
+    getchar(); // To consume the newline left by previous input
+    fgets(library[bookCount].title, MAX_NAME, stdin);
+    library[bookCount].title[strcspn(library[bookCount].title, "\n")] = '\0';
+    printf("Enter Author Name: ");
+    fgets(library[bookCount].author, MAX_NAME, stdin);
+    library[bookCount].author[strcspn(library[bookCount].author, "\n")] = '\0';
+
+    library[bookCount].isIssued = 0;
+    bookCount++;
+    printf("Book added successfully!\n");
+}
+
+// Function to remove a book
+void removeBook() {
+    int id;
+    printf("Enter Book ID to remove: ");
+    scanf("%d", &id);
+
+    int index = findBookById(id);
+    if (index == -1) {
+        printf("Book not found.\n");
+        return;
+    }
+
+    for (int i = index; i < bookCount - 1; i++) {
+        library[i] = library[i + 1];
+    }
+    bookCount--;
+    printf("Book removed successfully.\n");
+}
+
+// Function to issue a book
+void issueBook() {
+    int id;
+    char user[MAX_NAME];
+
+    printf("Enter Book ID to issue: ");
+    scanf("%d", &id);
+    int index = findBookById(id);
+    if (index == -1 || library[index].isIssued) {
+        printf("Book is not available for issuing.\n");
+        return;
+    }
+
+    printf("Enter the name of the user: ");
+    getchar();
+    fgets(user, MAX_NAME, stdin);
+    user[strcspn(user, "\n")] = '\0';
+
+    library[index].isIssued = 1;
+    strcpy(library[index].issuedTo, user);
+    library[index].issuedDate = time(NULL);
+    printf("Book issued successfully to %s.\n", user);
+}
+
+// Function to return a book
+void returnBook() {
+    int id;
+    printf("Enter Book ID to return: ");
+    scanf("%d", &id);
+
+    int index = findBookById(id);
+    if (index == -1 || !library[index].isIssued) {
+        printf("Invalid Book ID or Book is not issued.\n");
+        return;
+    }
+
+    calculateFine(library[index].issuedDate);
+    library[index].isIssued = 0;
+    strcpy(library[index].issuedTo, "");
+    library[index].issuedDate = 0;
+    printf("Book returned successfully.\n");
+}
+
+// Function to calculate fine based on the return date
+void calculateFine(time_t issuedDate) {
+    time_t currentTime = time(NULL);
+    int daysDifference = (int) difftime(currentTime, issuedDate) / (60 * 60 * 24);
+
+    if (daysDifference > ISSUE_PERIOD) {
+        int overdueDays = daysDifference - ISSUE_PERIOD;
+        int fine = overdueDays * FINE_PER_DAY;
+        printf("Overdue by %d days. Fine is Rs. %d\n", overdueDays, fine);
+    } else {
+        printf("No fine. Returned on time.\n");
+    }
+}
+
+// Function to list all books
+void listBooks() {
+    printf("List of Books in the Library:\n");
+    printf("--------------------------------------------------------\n");
+    printf("| %-5s | %-30s | %-15s | %-10s |\n", "ID", "Title", "Author", "Status");
+    printf("--------------------------------------------------------\n");
+
+    for (int i = 0; i < bookCount; i++) {
+        printf("| %-5d | %-30s | %-15s | %-10s |\n", 
+               library[i].id, 
+               library[i].title, 
+               library[i].author, 
+               library[i].isIssued ? "Issued" : "Available");
+    }
+
+    printf("--------------------------------------------------------\n");
+}
+
+// Function to search for a book
+void searchBook() {
+    int id;
+    printf("Enter Book ID to search: ");
+    scanf("%d", &id);
+
+    int index = findBookById(id);
+    if (index == -1) {
+        printf("Book not found.\n");
+        return;
+    }
+
+    printf("Book Details:\n");
+    printf("ID: %d\n", library[index].id);
+    printf("Title: %s\n", library[index].title);
+    printf("Author: %s\n", library[index].author);
+    if (library[index].isIssued) {
+        printf("Status: Issued\n");
+        printf("Issued To: %s\n", library[index].issuedTo);
+        printf("Issued Date: %s", ctime(&library[index].issuedDate));
+    } else {
+        printf("Status: Available\n");
+    }
+}
+
+// Function to check the count of available books
+void availableBooksCount() {
+    int availableCount = 0;
+    for (int i = 0; i < bookCount; i++) {
+        if (!library[i].isIssued) {
+            availableCount++;
+        }
+    }
+    printf("Total available books: %d\n", availableCount);
+}
+
+// Utility function to find book index by ID
+int findBookById(int id) {
+    for (int i = 0; i < bookCount; i++) {
+        if (library[i].id == id) return i;
+    }
+    return -1;
+}
